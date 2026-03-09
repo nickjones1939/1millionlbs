@@ -429,7 +429,7 @@ export default function App() {
             {/* Desktop nav */}
             <nav className="desktop-nav">
               {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["playlists","PLAYLISTS"]].map(([v, label]) => {
-                const activeColor = v===="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : "#84cc16";
+                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : "#84cc16";
                 return (
                   <button key={v} className="nav-btn"
                     onClick={() => setView(v)}
