@@ -3,6 +3,8 @@ import { useAuth } from "./hooks/useAuth";
 import { useWorkouts } from "./hooks/useWorkouts";
 import AuthModal from "./components/AuthModal";
 import OnboardingModal from "./components/OnboardingModal";
+import ChallengeView from "./components/ChallengeView";
+import GoalEditor, { useGoal } from "./components/GoalEditor";
 
 const MUSCLE_GROUPS = [
   { id: "chest",     label: "Chest"     },
@@ -231,13 +233,16 @@ export default function App() {
   // Show onboarding if user is logged in but has no display name
   const needsOnboarding = user && !authLoading && !profile;
 
+  const { goal, saveGoal } = useGoal(user);
+  const [showGoalEditor, setShowGoalEditor] = useState(false);
+
   const now    = Date.now();
   const cutoff = now - 30 * 86400000;
 
   const recent      = useMemo(() => entries.filter(e => e.timestamp >= cutoff), [entries]);
   const recentCardio = useMemo(() => cardioLog.filter(e => e.timestamp >= cutoff), [cardioLog]);
   const totalLbs    = useMemo(() => recent.reduce((s, e) => s + e.total, 0), [recent]);
-  const pct         = Math.min((totalLbs / TARGET) * 100, 100);
+  const pct         = Math.min((totalLbs / goal) * 100, 100);
 
   const byGroup = useMemo(() => {
     const map = {};
@@ -275,12 +280,12 @@ export default function App() {
       tips.push({ type: "warn", msg: `${top.group} is ${top.pct.toFixed(0)}% of total — redistribute some load` });
     if (bottom && bottom.pct < 5)
       tips.push({ type: "boost", msg: `Increase ${bottom.group} focus — only ${bottom.pct.toFixed(1)}% of volume` });
-    const remaining   = TARGET - totalLbs;
+    const remaining   = goal - totalLbs;
     const dailyNeeded = remaining > 0 ? Math.ceil(remaining / 30) : 0;
     if (remaining > 0)
       tips.push({ type: "info", msg: `Need ${dailyNeeded.toLocaleString()} lbs/day to reach 1M this month` });
     else
-      tips.push({ type: "win", msg: "TARGET CRUSHED — Welcome to the 1M Lb Club" });
+      tips.push({ type: "win", msg: `TARGET CRUSHED — ${goal.toLocaleString()} LBS MOVED THIS MONTH 🏆` });
     return tips;
   }, [insights, totalLbs]);
 
@@ -403,6 +408,7 @@ export default function App() {
       {/* Auth & Onboarding Modals */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} authHooks={authHooks} />}
       {needsOnboarding && <OnboardingModal user={user} saveProfile={saveProfile} />}
+      {showGoalEditor && <GoalEditor user={user} currentGoal={goal} onSave={saveGoal} onClose={() => setShowGoalEditor(false)} />}
 
       <div style={{ fontFamily: "'Barlow', sans-serif", background: "#0d0d0d", color: "#e5e5e5", minHeight: "100vh" }}>
 
@@ -422,8 +428,8 @@ export default function App() {
 
             {/* Desktop nav */}
             <nav className="desktop-nav">
-              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["playlists","PLAYLISTS"]].map(([v, label]) => {
-                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : "#84cc16";
+              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["playlists","PLAYLISTS"]].map(([v, label]) => {
+                const activeColor = v===="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : "#84cc16";
                 return (
                   <button key={v} className="nav-btn"
                     onClick={() => setView(v)}
@@ -463,8 +469,8 @@ export default function App() {
           {/* Mobile dropdown */}
           {menuOpen && (
             <div className="mobile-dropdown">
-              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["playlists","PLAYLISTS"]].map(([v, label]) => {
-                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : "#84cc16";
+              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["playlists","PLAYLISTS"]].map(([v, label]) => {
+                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : "#84cc16";
                 return (
                   <button key={v}
                     onClick={() => { setView(v); setMenuOpen(false); }}
@@ -499,13 +505,19 @@ export default function App() {
               {/* Hero card */}
               <div style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: 14, padding: "32px 36px", marginBottom: 20, position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", top: 0, right: 0, width: 300, height: "100%", background: "radial-gradient(ellipse at top right, #84cc1608 0%, transparent 70%)", pointerEvents: "none" }} />
-                <div style={{ fontSize: 10, letterSpacing: 4, color: "#444", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, marginBottom: 8 }}>30-DAY PROGRESS</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, letterSpacing: 4, color: "#444", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700 }}>30-DAY PROGRESS</div>
+                  <button onClick={() => setShowGoalEditor(true)}
+                    style={{ background: "none", border: "1px solid #2a2a2a", borderRadius: 6, color: "#555", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 10, letterSpacing: 2, padding: "4px 10px", cursor: "pointer" }}>
+                    GOAL: {goal.toLocaleString()} LBS ✎
+                  </button>
+                </div>
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 24, flexWrap: "wrap" }}>
                   <span className={flash ? "flash-green" : ""} style={{ fontFamily: "'Oswald', sans-serif", fontWeight: 700, fontSize: 80, lineHeight: 0.9, color: "#fff", letterSpacing: -2 }}>
                     {totalLbs.toLocaleString()}
                   </span>
                   <div style={{ paddingBottom: 8 }}>
-                    <div style={{ fontSize: 15, color: "#444", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, letterSpacing: 1 }}>/ 1,000,000 LBS</div>
+                    <div style={{ fontSize: 15, color: "#444", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, letterSpacing: 1 }}>/ {goal.toLocaleString()} LBS</div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 34, lineHeight: 1, letterSpacing: 1, background: "linear-gradient(90deg, #84cc16, #eab308)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>{pct.toFixed(1)}%</div>
                   </div>
                 </div>
@@ -917,6 +929,17 @@ export default function App() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* ══ CHALLENGES ══ */}
+          {view === "challenges" && (
+            <ChallengeView
+              user={user}
+              profile={profile}
+              userTotalLbs={totalLbs}
+              userSessions={recent.length}
+              userCardioMins={recentCardio.reduce((s, e) => s + e.minutes, 0)}
+            />
           )}
 
           {/* ══ PLAYLISTS ══ */}
