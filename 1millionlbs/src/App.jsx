@@ -5,6 +5,9 @@ import AuthModal from "./components/AuthModal";
 import OnboardingModal from "./components/OnboardingModal";
 import ChallengeView from "./components/ChallengeView";
 import GoalEditor, { useGoal } from "./components/GoalEditor";
+import ProofOfWork from "./components/ProofOfWork";
+import PublicLeaderboard from "./components/PublicLeaderboard";
+import { supabase } from "./lib/supabase";
 
 const MUSCLE_GROUPS = [
   { id: "chest",     label: "Chest"     },
@@ -214,7 +217,7 @@ function PlaylistsView() {
 
 export default function App() {
   const authHooks = useAuth();
-  const { user, profile, loading: authLoading, signOut, saveProfile } = authHooks;
+  const { user, profile, loading: authLoading, signOut, saveProfile, refreshProfile } = authHooks;
   const { entries, cardioLog, loadingData, logLift, logCardio } = useWorkouts(user);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -235,6 +238,9 @@ export default function App() {
 
   const { goal, saveGoal } = useGoal(user);
   const [showGoalEditor, setShowGoalEditor] = useState(false);
+  const [showProofOfWork, setShowProofOfWork] = useState(false);
+  const [pendingLogForm, setPendingLogForm] = useState(null);
+
 
   const now    = Date.now();
   const cutoff = now - 30 * 86400000;
@@ -291,7 +297,30 @@ export default function App() {
 
   const handleLog = async () => {
     if (!form.muscleGroup || !form.sets || !form.reps || !form.weight) return;
+    // If user is on public leaderboard, require proof of work
+    if (isPublic && user) {
+      setPendingLogForm({ ...form });
+      setShowProofOfWork(true);
+      return;
+    }
     await logLift(form);
+    setForm({ muscleGroup: "", sets: "", reps: "", weight: "" });
+    setSubmitted(true); setFlash(true);
+    setTimeout(() => setSubmitted(false), 2200);
+    setTimeout(() => setFlash(false), 600);
+  };
+
+  const handleProofComplete = async ({ videoUrl, recordedAt }) => {
+    setShowProofOfWork(false);
+    if (!pendingLogForm) return;
+    const entry = await logLift(pendingLogForm);
+    // Save proof record
+    await supabase.from('set_proofs').insert({
+      user_id: user.id,
+      video_url: videoUrl,
+      recorded_at: recordedAt,
+    });
+    setPendingLogForm(null);
     setForm({ muscleGroup: "", sets: "", reps: "", weight: "" });
     setSubmitted(true); setFlash(true);
     setTimeout(() => setSubmitted(false), 2200);
@@ -409,6 +438,13 @@ export default function App() {
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} authHooks={authHooks} />}
       {needsOnboarding && <OnboardingModal user={user} saveProfile={saveProfile} />}
       {showGoalEditor && <GoalEditor user={user} currentGoal={goal} onSave={saveGoal} onClose={() => setShowGoalEditor(false)} />}
+      {showProofOfWork && (
+        <ProofOfWork
+          setInfo={pendingLogForm}
+          onComplete={handleProofComplete}
+          onCancel={() => { setShowProofOfWork(false); setPendingLogForm(null); }}
+        />
+      )}
 
       <div style={{ fontFamily: "'Barlow', sans-serif", background: "#0d0d0d", color: "#e5e5e5", minHeight: "100vh" }}>
 
@@ -428,8 +464,8 @@ export default function App() {
 
             {/* Desktop nav */}
             <nav className="desktop-nav">
-              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["playlists","PLAYLISTS"]].map(([v, label]) => {
-                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : "#84cc16";
+              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["leaderboard","LEADERBOARD"],["playlists","PLAYLISTS"]].map(([v, label]) => {
+                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : v==="leaderboard" ? "#fbbf24" : "#84cc16";
                 return (
                   <button key={v} className="nav-btn"
                     onClick={() => setView(v)}
@@ -469,8 +505,8 @@ export default function App() {
           {/* Mobile dropdown */}
           {menuOpen && (
             <div className="mobile-dropdown">
-              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["playlists","PLAYLISTS"]].map(([v, label]) => {
-                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : "#84cc16";
+              {[["dashboard","DASHBOARD"],["log","LOG SET"],["cardio","LOG CARDIO"],["history","HISTORY"],["challenges","CHALLENGES"],["leaderboard","LEADERBOARD"],["playlists","PLAYLISTS"]].map(([v, label]) => {
+                const activeColor = v==="cardio" ? "#38bdf8" : v==="playlists" ? "#1DB954" : v==="challenges" ? "#f97316" : v==="leaderboard" ? "#fbbf24" : "#84cc16";
                 return (
                   <button key={v}
                     onClick={() => { setView(v); setMenuOpen(false); }}
@@ -644,7 +680,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Two-col */}
+    {/* Two-col */}
               <div className="two-col">
 
                 {/* Muscle breakdown */}
@@ -930,6 +966,9 @@ export default function App() {
               )}
             </div>
           )}
+
+          {/* ══ LEADERBOARD ══ */}
+          {view === "leaderboard" && <PublicLeaderboard currentUser={user} profile={profile} onProUpgrade={refreshProfile} />}
 
           {/* ══ CHALLENGES ══ */}
           {view === "challenges" && (
