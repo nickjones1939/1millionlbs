@@ -82,10 +82,14 @@ export function useAuth() {
     return { error }
   }
 
+  async function refreshProfile() {
+    if (user) await fetchProfile(user.id)
+  }
+
   return {
     user, profile, loading,
     signInWithGoogle, signInWithApple, signInWithSpotify,
     signInWithEmail, signUpWithEmail,
-    signOut, saveProfile,
+    signOut, saveProfile, refreshProfile,
   }
 }
